@@ -223,6 +223,7 @@ class MyMainWindow(QMainWindow):
             self.log_area.clear()
             self.image_list.clear()
             self.origin_pixmap.load(file_name)
+            self.current_image_label.setText(file_name)
             self.setLabelImage(self.origin_img_label, self.origin_pixmap)
             self.log('加载图片：' + file_name)
             self.image_list.append(file_name)
@@ -252,6 +253,7 @@ class MyMainWindow(QMainWindow):
             self.status_bar.showMessage('正在加载：' + origin_name)
             self.origin_pixmap.load(self.image_list[self.image_index])
             self.setLabelImage(self.origin_img_label, self.origin_pixmap)
+            self.current_image_label.setText(self.image_list[self.image_index])
             self.log('当前图片：' + origin_name)
             geo_name = self.image_list[self.image_index].split('/')[-1].split('.')[0] + '_geo.png'
             geo_path = self.image_list[self.image_index].replace('distorted/' + origin_name, '') + 'geo_rec/' + geo_name
@@ -303,6 +305,7 @@ class MyMainWindow(QMainWindow):
             ill_path = self.image_list[self.image_index].replace('distorted/' + origin_name, '') + 'ill_rec/' + ill_name
             self.origin_pixmap.load(self.image_list[self.image_index])
             self.setLabelImage(self.origin_img_label, self.origin_pixmap)
+            self.current_image_label.setText(self.image_list[self.image_index])
             # self.log('加载图片：' + self.image_list[self.image_index])
             if os.path.exists(geo_path):
                 self.geo_pixmap.load(geo_path)
@@ -334,6 +337,7 @@ class MyMainWindow(QMainWindow):
             ill_path = self.image_list[self.image_index].replace('distorted/' + origin_name, '') + 'ill_rec/' + ill_name
             self.origin_pixmap.load(self.image_list[self.image_index])
             self.setLabelImage(self.origin_img_label, self.origin_pixmap)
+            self.current_image_label.setText(self.image_list[self.image_index])
             # self.log('加载图片：' + self.image_list[self.image_index])
             if os.path.exists(geo_path):
                 self.geo_pixmap.load(geo_path)
@@ -353,7 +357,7 @@ class MyMainWindow(QMainWindow):
 
     def on_rec(self):
         if not self.is_model_loaded:
-            self.status_bar.showMessage('正在加载模型')
+            self.status_bar.showMessage('正在矫正：' + self.image_list[self.image_index].split('/')[-1])
             self.log('正在加载模型')
             reload_model(self.GeoTr_Seg_model, model_path)
             self.GeoTr_Seg_model.eval()
@@ -362,10 +366,9 @@ class MyMainWindow(QMainWindow):
         for image_path in self.image_list:
             name = image_path.split('.')[-2]
 
-            print('开始处理：', image_path)
-            print('读取图片：', end='')
+            self.log('开始处理：' + image_path)
             image_original = np.array(Image.open(image_path))[:, :, :3] / 255.
-            print('Done. Image resolution: ', image_original.shape)
+            self.log('读取图片完成。分辨率: ' + str(image_original.shape))
             h, w, _ = image_original.shape
 
             image = cv2.resize(image_original, (288, 288))
@@ -385,22 +388,20 @@ class MyMainWindow(QMainWindow):
                 out = F.grid_sample(torch.from_numpy(image_original).permute(2,0,1).unsqueeze(0).float(), lbl, align_corners=True)
 
                 image_geo = ((out[0]*255).permute(1, 2, 0).numpy())[:,:,::-1].astype(np.uint8)
-                print('Done.')
-                print('Saving geo images...', end='')
-                cv2.imwrite('./geo_rec' + name + '_geo' + '.png', image_geo)
-                print('Done.')
+                self.log('几何校正完成')
+                print('保存几何校正结果')
+                print(name.replace('distorted', 'geo_rec') + '_geo' + '.png')
+                cv2.imwrite(name.replace('distorted', 'geo_rec') + '_geo' + '.png', image_geo)
 
-                ill_save_path = 'ill_rec' + name + '_ill' + '.png'
-                print('Illumination correction working...', end='')
+                ill_save_path = name.replace('distorted', 'ill_rec') + '_ill' + '.png'
+                self.log('正在进行光照修复...')
                 rec_ill(image_geo, ill_save_path)
-                print('Done.')
-        print('Done: ', image_path + '\n')
+        self.log('处理完成: ' + image_path)
 
-        self.log('开始矫正')
-        self.status_bar.showMessage('正在矫正')
-        self.rec_pixmap = self.origin_pixmap
-        self.setLabelImage(self.rec_img_label, self.rec_pixmap)
-        self.log('矫正完成')
+        self.geo_pixmap.load(name.replace('distorted', 'geo_rec') + '_geo' + '.png')
+        self.setLabelImage(self.geo_img_label, self.geo_pixmap)
+        self.ill_pixmap.load(name.replace('distorted', 'ill_rec') + '_ill' + '.png')
+        self.setLabelImage(self.ill_img_label, self.ill_pixmap)
         self.status_bar.showMessage('就绪')
 
 class SettingDialog(QDialog):
